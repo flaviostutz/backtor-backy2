@@ -1,2 +1,4 @@
-# backtor-backy2
-Backtor Conductor worker for performing Back2 backups
+# backtor-restic
+
+Backtor Conductor worker for performing Restic backups
+
