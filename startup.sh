@@ -4,9 +4,8 @@ set -e
 
 echo "Starting Restic API..."
 backtor-restic \
+    --restic-password=$RESTIC_PASSWORD \
     --log-level=$LOG_LEVEL \
+    --conductor-url=$CONDUCTOR_API_URL \
     --repo-dir=$TARGET_DATA_PATH \
-    --source-path=$SOURCE_DATA_PATH \
-    --pre-post-timeout=$PRE_POST_TIMEOUT \
-    --pre-backup-command="$PRE_BACKUP_COMMAND" \
-    --post-backup-command="$POST_BACKUP_COMMAND"
+    --source-path=$SOURCE_DATA_PATH

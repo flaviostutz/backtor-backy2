@@ -3,54 +3,127 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"regexp"
-	"strings"
-	"time"
 
-	"github.com/Sirupsen/logrus"
-	"github.com/flaviostutz/backtor-webhook/backtorhook"
+	conductor "github.com/Netflix/conductor/client/go"
+	"github.com/Netflix/conductor/client/go/task"
+
+	"github.com/sirupsen/logrus"
 )
 
-var sourcePath *string
-var repoDir *string
-
-//ResticBackuper sample backuper
-type ResticBackuper struct {
-}
+var (
+	sourcePath     string
+	repoDir        string
+	resticPassword string
+)
 
 func main() {
-	logrus.Info("====Starting Restic REST server====")
+	logLevel := flag.String("loglevel", "debug", "debug, info, warning, error")
+	conductorURL0 := flag.String("conductor-url", "", "Conductor API URL")
+	sourcePath0 := flag.String("source-path", "/backup-source", "Backup source path")
+	repoDir0 := flag.String("repo-dir", "/backup-repo", "Restic repository of backups")
+	resticPassword0 := flag.String("restic-password", "", "Restic repository password")
+	flag.Parse()
 
-	resticBackuper := ResticBackuper{}
-	err := backtorhook.Initialize(resticBackuper)
-	if err != nil {
-		logrus.Errorf("Error initializating backtorhook. err=%s", err)
-		os.Exit(1)
+	switch *logLevel {
+	case "debug":
+		logrus.SetLevel(logrus.DebugLevel)
+		break
+	case "warning":
+		logrus.SetLevel(logrus.WarnLevel)
+		break
+	case "error":
+		logrus.SetLevel(logrus.ErrorLevel)
+		break
+	default:
+		logrus.SetLevel(logrus.InfoLevel)
 	}
+
+	sourcePath = *sourcePath0
+	repoDir = *repoDir0
+	resticPassword = *resticPassword0
+
+	if sourcePath == "" {
+		logrus.Errorf("'--source-path' is required")
+		panic(1)
+	}
+	if repoDir == "" {
+		logrus.Errorf("'--repo-dir' is required")
+		panic(1)
+	}
+	if resticPassword == "" {
+		logrus.Errorf("'--restic-password' is required")
+		panic(1)
+	}
+	if *conductorURL0 == "" {
+		logrus.Errorf("'--conductor-url' is required")
+		panic(1)
+	}
+
+	logrus.Info("====Starting Restic Conductor Worker====")
+
+	initRepo()
+
+	c := conductor.NewConductorWorker(*conductorURL0, 1, 1000)
+
+	c.Start("backup", backupTask, false)
+	c.Start("remove", removeTask, true)
 }
 
-//RegisterFlags register command line flags
-func (sb ResticBackuper) RegisterFlags() error {
-	sourcePath = flag.String("source-path", "/backup-source", "Backup source path")
-	repoDir = flag.String("repo-dir", "/backup-repo", "Restic repository of backups")
-	return nil
+func backupTask(t *task.Task) (tr *task.TaskResult, err error) {
+	logrus.Debugf("Executing backupTask")
+
+	bn, ok := t.InputData["backupName"]
+	if !ok {
+		return tr, fmt.Errorf("'backupName' is required as Input data")
+	}
+
+	backupName := bn.(string)
+	logrus.Debugf("backupName=%s", backupName)
+
+	tr = task.NewTaskResult(t)
+	output := map[string]interface{}{
+		"dataId":     "123",
+		"dataSizeMB": 111.0,
+	}
+	tr.OutputData = output
+	tr.Status = "COMPLETED"
+
+	return tr, nil
+}
+
+func removeTask(t *task.Task) (tr *task.TaskResult, err error) {
+	logrus.Debugf("Executing removeTask")
+
+	bn, ok := t.InputData["backupName"]
+	if !ok {
+		return tr, fmt.Errorf("'backupName' is required as Input data")
+	}
+	backupName := bn.(string)
+
+	di, ok := t.InputData["dataId"]
+	if !ok {
+		return tr, fmt.Errorf("'backupName' is required as Input data")
+	}
+	dataID := di.(string)
+
+	logrus.Debugf("backupName=%s dataID=%s", backupName, dataID)
+
+	tr = task.NewTaskResult(t)
+	output := map[string]interface{}{}
+	tr.OutputData = output
+	tr.Status = "COMPLETED"
+
+	return tr, nil
 }
 
 //Init initialize
-func (sb ResticBackuper) Init() error {
-	err := mkDirs(baseIDDir())
-	if err != nil {
-		logrus.Errorf("Couldn't create id references. err=%s", err)
-		return err
-	}
-
+func initRepo() error {
 	logrus.Debugf("Checking if Restic repo %s was already initialized", *repoDir)
-	result, err := backtorhook.ExecShell("restic snapshots -r " + *repoDir)
+	result, err := ExecShellf("restic snapshots -r %s", *repoDir)
 	if err != nil {
 		logrus.Debugf("Couldn't access Restic repo. Trying to create it. err=", err)
-		_, err := backtorhook.ExecShell("restic init -r " + *repoDir)
+		_, err := ExecShellf("restic init -r %s", *repoDir)
 		if err != nil {
 			logrus.Debugf("Error creating Restic repo: %s %s", err, result)
 			return err
@@ -64,11 +137,11 @@ func (sb ResticBackuper) Init() error {
 }
 
 //CreateNewBackup creates a new backup
-func (sb ResticBackuper) CreateNewBackup(apiID string, timeout time.Duration, shellContext *backtorhook.ShellContext) error {
-	logrus.Infof("CreateNewBackup() apiID=%s timeout=%d s", apiID, timeout.Seconds)
+func CreateNewBackup(backupName string) (string, error) {
+	logrus.Infof("CreateNewBackup() backupName=%s", backupName)
 
 	logrus.Infof("Calling Restic...")
-	result, err := backtorhook.ExecShell("restic backup /backup-source -r " + *repoDir)
+	result, err := ExecShellf("restic backup /backup-source/%s -r %s", backupName, *repoDir)
 	if err != nil {
 		return err
 	}
@@ -78,87 +151,20 @@ func (sb ResticBackuper) CreateNewBackup(apiID string, timeout time.Duration, sh
 	success := (len(id) == 2)
 	if !success {
 		logrus.Warnf("Snapshot not created. result=%s", result)
-	} else {
-		dataID := id[1]
-		err = saveDataID(apiID, dataID)
-		if err != nil {
-			return err
-		}
-		logrus.Infof("Backup finished")
 	}
 
-	return nil
-}
+	dataID := id[1]
+	logrus.Infof("Backup finished")
 
-//GetAllBackups returns all backups from underlaying backuper. optional for backtor
-func (sb ResticBackuper) GetAllBackups() ([]backtorhook.backtorResponse, error) {
-	logrus.Debugf("GetAllBackups")
-	result, err := backtorhook.ExecShell("restic snapshots --quiet -r " + *repoDir)
-	if err != nil {
-		return nil, err
-	}
-
-	backups := make([]backtorhook.backtorResponse, 0)
-	lines := strings.Split(result, "\n")
-	for i, line := range lines {
-		space := regexp.MustCompile(`\s+`)
-		line = space.ReplaceAllString(line, " ")
-		cols := strings.Split(line, " ")
-		if i == 0 || len(cols) < 3 {
-			continue
-		}
-
-		dataID := cols[0]
-
-		sr := backtorhook.backtorResponse{
-			// ID:      getAPIID(dataID),
-			DataID:  dataID,
-			Status:  "available",
-			Message: line,
-			SizeMB:  -1,
-		}
-		backups = append(backups, sr)
-	}
-
-	return backups, nil
-}
-
-//GetBackup get an specific backup along with status
-func (sb ResticBackuper) GetBackup(apiID string) (*backtorhook.backtorResponse, error) {
-	logrus.Debugf("GetBackup apiID=%s", apiID)
-
-	dataID, err0 := getDataID(apiID)
-	if err0 != nil {
-		logrus.Debugf("BackyID not found for apiId %s. err=%s", apiID, err0)
-		return nil, nil
-	}
-
-	res, err := findBackup(apiID, dataID)
-	if err != nil {
-		return nil, nil
-	}
-
-	return res, nil
+	return dataID, nil
 }
 
 //DeleteBackup removes current backup from underlaying backup storage
-func (sb ResticBackuper) DeleteBackup(apiID string) error {
-	logrus.Debugf("DeleteBackup apiID=%s", apiID)
+func DeleteBackup(dataID string) error {
+	logrus.Debugf("DeleteBackup dataID=%s", dataID)
 
-	dataID, err0 := getDataID(apiID)
-	if err0 != nil {
-		logrus.Debugf("Restic backup not found for apiID %s dataID %s. err=%s", apiID, dataID, err0)
-		return err0
-	}
-
-	_, err0 = findBackup(apiID, dataID)
-	if err0 != nil {
-		logrus.Debugf("Backup apiID %s, dataID %s not found for removal", apiID, dataID)
-		return err0
-	}
-
-	logrus.Debugf("Backup apiID=%s dataID=%s found. Proceeding to deletion", apiID, dataID)
-	result, err := backtorhook.ExecShell("restic forget " + dataID + " -r " + *repoDir)
+	logrus.Debugf("Backup dataID=%s found. Proceeding to deletion", dataID)
+	result, err := ExecShellf("restic forget %s -r %s", dataID, *repoDir)
 	if err != nil {
 		return err
 	}
@@ -174,69 +180,6 @@ func (sb ResticBackuper) DeleteBackup(apiID string) error {
 		return fmt.Errorf("Returned id from forget is different from requested. %s != %s", id[1], dataID)
 	}
 
-	logrus.Debugf("Delete apiID %s dataID %s successful", apiID, dataID)
+	logrus.Debugf("Delete dataID %s successful", dataID)
 	return nil
-}
-
-func getDataID(apiID string) (string, error) {
-	fn := baseIDDir() + apiID
-	if _, err := os.Stat(fn); err == nil {
-		logrus.Debugf("Found api id reference for %s", apiID)
-		data, err0 := ioutil.ReadFile(fn)
-		if err0 != nil {
-			return "", err0
-		} else {
-			dataID := string(data)
-			logrus.Debugf("apiID %s <-> dataID %s", apiID, dataID)
-			return dataID, nil
-		}
-	} else {
-		return "", fmt.Errorf("dataID for apiID %s not found", apiID)
-	}
-}
-
-func saveDataID(apiID string, dataID string) error {
-	logrus.Debugf("Setting apiID %s <-> dataID %s", apiID, dataID)
-	fn := baseIDDir() + apiID
-	if _, err := os.Stat(fn); err == nil {
-		err = os.Remove(fn)
-		if err != nil {
-			return fmt.Errorf("Couldn't replace existing apiID file. err=%s", err)
-		}
-	}
-	return ioutil.WriteFile(fn, []byte(dataID), 0644)
-}
-
-func mkDirs(path string) error {
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return os.MkdirAll(path, os.ModePerm)
-	}
-	return nil
-}
-
-func findBackup(apiID string, dataID string) (*backtorhook.backtorResponse, error) {
-	result, err := backtorhook.ExecShell("restic snapshots " + dataID + " -r " + *repoDir)
-	if err != nil {
-		return nil, err
-	}
-	logrus.Debugf("Query snapshots result: %s", result)
-
-	rex, _ := regexp.Compile("-\n([0-9a-z]{4,16})")
-	id0 := rex.FindStringSubmatch(result)
-	if len(id0) != 2 {
-		logrus.Debug("Couldn't find backup id in response '%'", id0, result)
-		return nil, nil
-	}
-
-	logrus.Debugf("Snapshot %s found", id0)
-	return &backtorhook.backtorResponse{
-		ID:      id0[1],
-		DataID:  dataID,
-		Status:  "available",
-		Message: result,
-	}, nil
-}
-
-func baseIDDir() string {
-	return *repoDir + "/ids/"
 }
