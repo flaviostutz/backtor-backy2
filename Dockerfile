@@ -17,21 +17,25 @@ RUN go build -o /go/bin/backtor-restic
 
 FROM golang:1.12.3
 
-    --log-level=$LOG_LEVEL \
-    --conductor-url=$CONDUCTOR_API_URL \
-    --repo-dir=$TARGET_DATA_PATH \
-    --source-path=$SOURCE_DATA_PATH
+RUN apt-get update && apt-get install -y restic
 
 ENV RESTIC_PASSWORD ''
 ENV SOURCE_DATA_PATH '/backup-source'
 ENV TARGET_DATA_PATH '/backup-repo'
 ENV CONDUCTOR_API_URL ''
+ENV LOG_LEVEL 'info'
 # ENV PRE_POST_TIMEOUT '7200'
 # ENV PRE_BACKUP_COMMAND ''
 # ENV POST_BACKUP_COMMAND ''
 
+RUN mkdir /backup-repo && mkdir /backup-source
+
 COPY --from=BUILD /go/bin/* /bin/
 ADD /startup.sh /
-ENTRYPOINT /startup.sh
+
+VOLUME [ "/backup-repo" ]
+VOLUME [ "/backup-source" ]
 
 EXPOSE 4000
+
+CMD [ "/startup.sh" ]

@@ -1,11 +1,9 @@
-github.com/Netflix/conductor v2.13.5+incompatible h1:xDPhY4iwfss1lZQI8GR9RYjItPOmw9ZPFxlk+6vyZKQ=
-github.com/Netflix/conductor v2.13.5+incompatible/go.mod h1:NIrueTquIhH+zkBVyvpwI8n7x+ygVJYkk6tzgPcLaBY=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
+github.com/ggrcha/conductor-go-client v0.0.0-20190603130700-242f9724e672 h1:IfFquDSjBd1mRFi1+knXkpnOyTlrC+qHh9I2eGaTFVQ=
+github.com/ggrcha/conductor-go-client v0.0.0-20190603130700-242f9724e672/go.mod h1:TBo9nHBEL1gEpGlaxF72U/pH4rltrfrsVZjJv3OR4pY=
 github.com/go-cmd/cmd v1.0.4 h1:IGt9dxWF1nTWP/u+En96g36YuF1nhPNAGG/72YAx6J4=
 github.com/go-cmd/cmd v1.0.4/go.mod h1:y8q8qlK5wQibcw63djSl/ntiHUHXHGdCkPk0j4QeW4s=
-github.com/go-test/deep v1.0.2 h1:onZX1rnHT3Wv6cqNgYyFOOlgVKJrksuCMCRvJStbMYw=
-github.com/go-test/deep v1.0.2/go.mod h1:wGDj63lr65AM2AQyKZd/NYHGb0R+1RLqB8NKt3aSFNA=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=

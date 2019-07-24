@@ -11,7 +11,7 @@ import (
 
 //ExecShellf execute shell command
 func ExecShellf(command string, args ...string) (string, error) {
-	return ExecShellTimeout(fmt.Sprintf(command, args), 10*time.Second)
+	return ExecShellTimeout(fmt.Sprintf(command, args), 90*time.Second)
 }
 
 //ExecShellTimeout execute shell command with timeout

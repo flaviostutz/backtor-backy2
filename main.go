@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"regexp"
 
-	conductor "github.com/Netflix/conductor/client/go"
-	"github.com/Netflix/conductor/client/go/task"
+	conductor "github.com/ggrcha/conductor-go-client"
+	"github.com/ggrcha/conductor-go-client/task"
 
 	"github.com/sirupsen/logrus"
 )
@@ -18,7 +18,7 @@ var (
 )
 
 func main() {
-	logLevel := flag.String("loglevel", "debug", "debug, info, warning, error")
+	logLevel := flag.String("log-level", "debug", "debug, info, warning, error")
 	conductorURL0 := flag.String("conductor-url", "", "Conductor API URL")
 	sourcePath0 := flag.String("source-path", "/backup-source", "Backup source path")
 	repoDir0 := flag.String("repo-dir", "/backup-repo", "Restic repository of backups")
@@ -79,71 +79,78 @@ func backupTask(t *task.Task) (tr *task.TaskResult, err error) {
 	}
 
 	backupName := bn.(string)
-	logrus.Debugf("backupName=%s", backupName)
+	logrus.Debugf("Creating backup. backupName=%s", backupName)
+
+	dataID, dataSizeMB, err := createNewBackup(backupName)
+	if err != nil {
+		return nil, err
+	}
 
 	tr = task.NewTaskResult(t)
 	output := map[string]interface{}{
-		"dataId":     "123",
-		"dataSizeMB": 111.0,
+		"dataId":     dataID,
+		"dataSizeMB": dataSizeMB,
 	}
 	tr.OutputData = output
-	tr.Status = "COMPLETED"
+	tr.Status = task.COMPLETED
 
 	return tr, nil
 }
 
-func removeTask(t *task.Task) (tr *task.TaskResult, err error) {
+func removeTask(t *task.Task) (tr0 *task.TaskResult, err0 error) {
 	logrus.Debugf("Executing removeTask")
 
 	bn, ok := t.InputData["backupName"]
 	if !ok {
-		return tr, fmt.Errorf("'backupName' is required as Input data")
+		return tr0, fmt.Errorf("'backupName' is required as Input data")
 	}
 	backupName := bn.(string)
 
 	di, ok := t.InputData["dataId"]
 	if !ok {
-		return tr, fmt.Errorf("'backupName' is required as Input data")
+		return tr0, fmt.Errorf("'backupName' is required as Input data")
 	}
 	dataID := di.(string)
 
-	logrus.Debugf("backupName=%s dataID=%s", backupName, dataID)
+	logrus.Debugf("Deleting backup. backupName=%s dataID=%s", backupName, dataID)
 
-	tr = task.NewTaskResult(t)
+	err := deleteBackup(dataID)
+	if err != nil {
+		return nil, err
+	}
+
+	tr := task.NewTaskResult(t)
 	output := map[string]interface{}{}
 	tr.OutputData = output
-	tr.Status = "COMPLETED"
+	tr.Status = task.COMPLETED
 
 	return tr, nil
 }
 
-//Init initialize
 func initRepo() error {
-	logrus.Debugf("Checking if Restic repo %s was already initialized", *repoDir)
-	result, err := ExecShellf("restic snapshots -r %s", *repoDir)
+	logrus.Debugf("Checking if Restic repo %s was already initialized", repoDir)
+	result, err := ExecShellf("restic snapshots -r %s", repoDir)
 	if err != nil {
-		logrus.Debugf("Couldn't access Restic repo. Trying to create it. err=", err)
-		_, err := ExecShellf("restic init -r %s", *repoDir)
+		logrus.Debugf("Couldn't access Restic repo. Trying to create it. err=%s", err)
+		_, err := ExecShellf("restic init -r %s", repoDir)
 		if err != nil {
 			logrus.Debugf("Error creating Restic repo: %s %s", err, result)
 			return err
-		} else {
-			logrus.Infof("Restic repo created successfuly")
 		}
+		logrus.Infof("Restic repo created successfuly")
 	} else {
 		logrus.Infof("Restic repo already exists and is accessible")
 	}
 	return nil
 }
 
-//CreateNewBackup creates a new backup
-func CreateNewBackup(backupName string) (string, error) {
-	logrus.Infof("CreateNewBackup() backupName=%s", backupName)
+func createNewBackup(backupName string) (dataID0 string, dataSizeMB0 int, err0 error) {
+	logrus.Infof("createNewBackup() backupName=%s", backupName)
 
 	logrus.Infof("Calling Restic...")
-	result, err := ExecShellf("restic backup /backup-source/%s -r %s", backupName, *repoDir)
+	result, err := ExecShellf("restic backup /backup-source/%s -r %s", backupName, repoDir)
 	if err != nil {
-		return err
+		return "", -1, err
 	}
 	logrus.Debugf("result: %s", result)
 	rex, _ := regexp.Compile("snapshot ([0-9a-zA-z]+) saved")
@@ -156,15 +163,16 @@ func CreateNewBackup(backupName string) (string, error) {
 	dataID := id[1]
 	logrus.Infof("Backup finished")
 
-	return dataID, nil
+	dataSizeMB := 111
+
+	return dataID, dataSizeMB, nil
 }
 
-//DeleteBackup removes current backup from underlaying backup storage
-func DeleteBackup(dataID string) error {
-	logrus.Debugf("DeleteBackup dataID=%s", dataID)
+func deleteBackup(dataID string) error {
+	logrus.Debugf("deleteBackup dataID=%s", dataID)
 
 	logrus.Debugf("Backup dataID=%s found. Proceeding to deletion", dataID)
-	result, err := ExecShellf("restic forget %s -r %s", dataID, *repoDir)
+	result, err := ExecShellf("restic forget %s -r %s", dataID, repoDir)
 	if err != nil {
 		return err
 	}
@@ -175,7 +183,6 @@ func DeleteBackup(dataID string) error {
 	if len(id) != 2 {
 		return fmt.Errorf("Couldn't find returned id from response")
 	}
-
 	if id[1] != dataID {
 		return fmt.Errorf("Returned id from forget is different from requested. %s != %s", id[1], dataID)
 	}
