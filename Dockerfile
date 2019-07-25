@@ -21,7 +21,7 @@ RUN apt-get update && apt-get install -y restic
 
 ENV RESTIC_PASSWORD ''
 ENV SOURCE_DATA_PATH '/backup-source'
-ENV TARGET_DATA_PATH '/backup-repo'
+ENV REPO_DIR '/backup-repo'
 ENV CONDUCTOR_API_URL ''
 ENV LOG_LEVEL 'info'
 # ENV PRE_POST_TIMEOUT '7200'

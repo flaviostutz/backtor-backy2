@@ -10,7 +10,7 @@ services:
       - RESTIC_PASSWORD=123
       - LOG_LEVEL=debug
       - SOURCE_DATA_PATH=/backup-source/TESTFILE
-      - TARGET_DATA_PATH=/backup-repo
+      - REPO_DIR=/backup-repo
       - CONDUCTOR_API_URL=http://192.168.20.13:8080/api
       # - PRE_BACKUP_COMMAND=dd if=/dev/zero of=/backup-source/TESTFILE bs=100MB count=2
       # - POST_BACKUP_COMMAND=rm /backup-source/TESTFILE
