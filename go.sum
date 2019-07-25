@@ -1,6 +1,6 @@
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
-github.com/flaviostutz/conductor-go-client v0.0.0-20190724125036-1d13a352841a h1:l2YeJh3rkEEATQV222zHQ1ESThpw+b09rn1zqpAIx58=
-github.com/flaviostutz/conductor-go-client v0.0.0-20190724125036-1d13a352841a/go.mod h1:hyR7iHcT8u3cCZ9kt5JXNc935dYhQM7m5/Z+gRzW5Oo=
+github.com/flaviostutz/conductor-go-client v0.0.0-20190725142952-b63bfdc32333 h1:J3LoX55EJxy4snsqnuziHsHfNA67VZeuhyloej3vJjA=
+github.com/flaviostutz/conductor-go-client v0.0.0-20190725142952-b63bfdc32333/go.mod h1:DWr+J1UgQOh5PYhFjshJZ1ihKIsBZLlsZ03D4QLin5w=
 github.com/go-cmd/cmd v1.0.4 h1:IGt9dxWF1nTWP/u+En96g36YuF1nhPNAGG/72YAx6J4=
 github.com/go-cmd/cmd v1.0.4/go.mod h1:y8q8qlK5wQibcw63djSl/ntiHUHXHGdCkPk0j4QeW4s=
 github.com/konsorten/go-windows-terminal-sequences v1.0.1/go.mod h1:T0+1ngSBFLxvqU3pZ+m/2kptfBszLMUkC4ZK/EgS/cQ=

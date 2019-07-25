@@ -68,7 +68,7 @@ func main() {
 
 	initRepo()
 
-	c := conductor.NewConductorWorker(*conductorURL0, 1, 500)
+	c := conductor.NewConductorWorker(*conductorURL0, 1, 500, 5000)
 
 	c.Start("backup", backupTask, false)
 	c.Start("remove", removeTask, true)
