@@ -4,6 +4,7 @@ services:
 
   backtor-restic:
     build: .
+    image: flaviostutz/backtor-restic
     ports:
       - 7070:7070
     environment:
