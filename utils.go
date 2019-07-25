@@ -10,14 +10,15 @@ import (
 )
 
 //ExecShellf execute shell command
-func ExecShellf(command string, args ...string) (string, error) {
-	return ExecShellTimeout(fmt.Sprintf(command, args), 90*time.Second)
+func ExecShellf(command string, args ...interface{}) (string, error) {
+	return ExecShellfTimeout(90*time.Second, command, args...)
 }
 
 //ExecShellTimeout execute shell command with timeout
-func ExecShellTimeout(command string, timeout time.Duration) (string, error) {
-	logrus.Debugf("shell command: %s", command)
-	acmd := cmd.NewCmd("bash", "-c", command)
+func ExecShellfTimeout(timeout time.Duration, command string, args ...interface{}) (string, error) {
+	command1 := fmt.Sprintf(command, args...)
+	logrus.Debugf("shell command: '%s'", command1)
+	acmd := cmd.NewCmd("bash", "-c", command1)
 	statusChan := acmd.Start() // non-blocking
 	running := true
 	// if ctx != nil {
@@ -48,7 +49,7 @@ func ExecShellTimeout(command string, timeout time.Duration) (string, error) {
 	status := acmd.Status()
 	logrus.Debugf("shell output (%d): %s", status.Exit, out)
 	if status.Exit != 0 {
-		return out, fmt.Errorf("Failed to run command: '%s'; exit=%d; out=%s", command, status.Exit, out)
+		return out, fmt.Errorf("Failed to run command: '%s'; exit=%d; out=%s", command1, status.Exit, out)
 	}
 	return out, nil
 }

@@ -3,10 +3,13 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"regexp"
+	"sync"
+	"time"
 
-	conductor "github.com/ggrcha/conductor-go-client"
-	"github.com/ggrcha/conductor-go-client/task"
+	conductor "github.com/flaviostutz/conductor-go-client"
+	"github.com/flaviostutz/conductor-go-client/task"
 
 	"github.com/sirupsen/logrus"
 )
@@ -15,6 +18,7 @@ var (
 	sourcePath     string
 	repoDir        string
 	resticPassword string
+	repoLock       = &sync.Mutex{}
 )
 
 func main() {
@@ -64,13 +68,15 @@ func main() {
 
 	initRepo()
 
-	c := conductor.NewConductorWorker(*conductorURL0, 1, 1000)
+	c := conductor.NewConductorWorker(*conductorURL0, 1, 500)
 
 	c.Start("backup", backupTask, false)
 	c.Start("remove", removeTask, true)
 }
 
 func backupTask(t *task.Task) (tr *task.TaskResult, err error) {
+	repoLock.Lock()
+	defer repoLock.Unlock()
 	logrus.Debugf("Executing backupTask")
 
 	bn, ok := t.InputData["backupName"]
@@ -81,7 +87,19 @@ func backupTask(t *task.Task) (tr *task.TaskResult, err error) {
 	backupName := bn.(string)
 	logrus.Debugf("Creating backup. backupName=%s", backupName)
 
-	dataID, dataSizeMB, err := createNewBackup(backupName)
+	createTimeout := 1 * time.Minute
+	to, ok1 := t.InputData["timeoutSeconds"]
+	if ok1 {
+		timeout := to.(float64)
+		createTimeout = time.Duration(int(timeout)) * time.Second
+	}
+
+	_, err2 := ExecShellf("restic -r %s unlock", repoDir)
+	if err2 != nil {
+		return nil, err2
+	}
+
+	dataID, dataSizeMB, err := createNewBackup(backupName, createTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +116,8 @@ func backupTask(t *task.Task) (tr *task.TaskResult, err error) {
 }
 
 func removeTask(t *task.Task) (tr0 *task.TaskResult, err0 error) {
+	repoLock.Lock()
+	defer repoLock.Unlock()
 	logrus.Debugf("Executing removeTask")
 
 	bn, ok := t.InputData["backupName"]
@@ -114,6 +134,10 @@ func removeTask(t *task.Task) (tr0 *task.TaskResult, err0 error) {
 
 	logrus.Debugf("Deleting backup. backupName=%s dataID=%s", backupName, dataID)
 
+	_, err2 := ExecShellf("restic -r %s unlock", repoDir)
+	if err2 != nil {
+		return nil, err2
+	}
 	err := deleteBackup(dataID)
 	if err != nil {
 		return nil, err
@@ -128,6 +152,8 @@ func removeTask(t *task.Task) (tr0 *task.TaskResult, err0 error) {
 }
 
 func initRepo() error {
+	repoLock.Lock()
+	defer repoLock.Unlock()
 	logrus.Debugf("Checking if Restic repo %s was already initialized", repoDir)
 	result, err := ExecShellf("restic snapshots -r %s", repoDir)
 	if err != nil {
@@ -144,11 +170,17 @@ func initRepo() error {
 	return nil
 }
 
-func createNewBackup(backupName string) (dataID0 string, dataSizeMB0 int, err0 error) {
+func createNewBackup(backupName string, createTimeout time.Duration) (dataID0 string, dataSizeMB0 int, err0 error) {
 	logrus.Infof("createNewBackup() backupName=%s", backupName)
 
+	sourceDir := fmt.Sprintf("/backup-source/%s", backupName)
+	_, err := os.Stat(sourceDir)
+	if os.IsNotExist(err) {
+		return "", -1, fmt.Errorf("Source backup dir %s doesn't exist", sourceDir)
+	}
+
 	logrus.Infof("Calling Restic...")
-	result, err := ExecShellf("restic backup /backup-source/%s -r %s", backupName, repoDir)
+	result, err := ExecShellfTimeout(createTimeout, "restic backup %s -r %s", sourceDir, repoDir)
 	if err != nil {
 		return "", -1, err
 	}
